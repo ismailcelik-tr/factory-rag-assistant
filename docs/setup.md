@@ -32,7 +32,7 @@ pip install -e ".[dev]"
 ollama serve
 
 # Pull required models
-ollama pull gemma4
+ollama pull gemma4:e4b
 ollama pull nomic-embed-text
 ```
 

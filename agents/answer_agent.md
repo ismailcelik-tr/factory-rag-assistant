@@ -13,7 +13,7 @@ Takes a query, a role identifier, and a ranked list of retrieved chunks from `re
 | `query` | string | yes | The user's question |
 | `role` | string | yes | One of: `rd_engineer`, `tech_service`, `sales`, `purchasing`, `production`, `customer_support` |
 | `retrieved_chunks` | array | yes | Output from `retrieval-agent` |
-| `llm_provider` | string | no | `ollama_gemma4` (default), `claude`, `openai` |
+| `llm_provider` | string | no | `ollama` (default), `claude`, `openai` |
 | `max_context_tokens` | int | no | Default: 3000 |
 
 ## Outputs
@@ -29,7 +29,7 @@ Takes a query, a role identifier, and a ranked list of retrieved chunks from `re
     }
   ],
   "role": "tech_service",
-  "model": "gemma4",
+  "model": "gemma4:e4b",
   "context_chunks_used": 4,
   "prompt_tokens": 1842
 }

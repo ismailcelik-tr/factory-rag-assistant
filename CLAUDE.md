@@ -20,7 +20,7 @@ pip install -e ".[dev]"
 ollama serve
 
 # Pull required models (one-time setup)
-ollama pull gemma4
+ollama pull gemma4:e4b
 ollama pull nomic-embed-text
 
 # Run the API server
@@ -106,7 +106,7 @@ Use the agents defined in `AGENTS.md` for multi-step pipeline tasks. Use skills 
 
 ## LLM Configuration
 
-The default model is **Gemma 4 via Ollama**. Ensure Ollama is running locally (`ollama serve`) and the model is pulled (`ollama pull gemma4`). All provider configuration lives in `app/config.py`. Do not hardcode model names outside that file.
+The default model is **`gemma4:e4b` via Ollama**. Ensure Ollama is running locally (`ollama serve`) and the model is pulled (`ollama pull gemma4:e4b`). All provider configuration lives in `app/config.py`. Do not hardcode model names outside that file.
 
 ---
 

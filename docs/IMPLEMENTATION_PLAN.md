@@ -8,10 +8,10 @@ Resolve all items in `docs/OPEN_DECISIONS.md` before starting Step 1.
 
 ## Before You Write Any Code
 
-1. Run `ollama pull gemma4` — if it fails, find the correct tag with `ollama list` and update `app/config.py` default accordingly
+1. Run `ollama pull gemma4:e4b` — model is already available; confirm with `ollama list`
 2. Run `ollama pull nomic-embed-text`
-3. Confirm both models appear in `ollama list`
-4. Place at least one real factory PDF (or a minimal sample) in `data/raw/samples/` — you need this for the smoke test
+3. Confirm both appear in `ollama list`
+4. Place at least one PDF in `data/raw/` — `smoke_test.py` uses the first PDF it finds there
 
 ---
 
@@ -40,7 +40,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
-    llm_model: str = "gemma4"          # verify tag before hardcoding
+    llm_model: str = "gemma4:e4b"
     embedding_model: str = "nomic-embed-text"
     top_k: int = 5
     max_context_tokens: int = 3000
@@ -409,11 +409,12 @@ Interactive loop: prompts for a question, calls the full pipeline, prints answer
 # python scripts/smoke_test.py
 ```
 Automated end-to-end check:
-1. Ingest `data/raw/samples/sample_manual.pdf` (or the first PDF found in `data/raw/`)
-2. Ask a question you know the answer to (hardcoded in the script)
-3. Assert `response["answer"]` is not null
-4. Assert `len(response["citations"]) > 0`
-5. Print "PASS" or "FAIL" with the response
+1. Find the first PDF in `data/raw/` (recursive). Fail immediately with a clear message if none found.
+2. Ingest it
+3. Ask a hardcoded question that any technical PDF should answer (e.g. "What is this document about?")
+4. Assert `response["answer"]` is not null
+5. Assert `len(response["citations"]) > 0`
+6. Print "PASS" or "FAIL" with the full response
 
 This script is the **definition of done for Phase 1**.
 
@@ -457,7 +458,7 @@ Retrieval debugging before adding documents is much cheaper than after.
 
 | Pitfall | Prevention |
 |---|---|
-| Ollama model tag is wrong | Verify with `ollama list` before writing any code |
+| Ollama model tag is wrong | Tag is `gemma4:e4b` — already confirmed available |
 | ChromaDB uses L2 instead of cosine | Set `{"hnsw:space": "cosine"}` at collection creation — cannot change later without dropping the collection |
 | LangChain package not found | Import from `langchain_community`, `langchain_text_splitters`, `langchain_ollama`, `langchain_chroma` — not `langchain` |
 | Chunk size is in characters not tokens | Document uses 1500 characters (≈ 300–400 tokens), not "512 tokens" |

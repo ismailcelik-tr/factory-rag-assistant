@@ -88,7 +88,7 @@ Agents in this project are Claude Code subagents invoked via the `Agent` tool (o
 - `query`: string
 - `role`: role identifier
 - `retrieved_chunks`: output from `retrieval-agent`
-- `llm_provider`: `ollama_gemma4` (default) | `claude` | `openai`
+- `llm_provider`: `ollama` (default) | `claude` | `openai`
 
 **Outputs**:
 ```json

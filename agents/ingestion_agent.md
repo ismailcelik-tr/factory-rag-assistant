@@ -4,7 +4,7 @@
 
 ## Responsibility
 
-Reads PDF and other document files from `data/raw/`, extracts clean text, applies semantic chunking (512-token target, 64-token overlap, heading-aware), and writes JSONL chunk records to `data/processed/`. Attaches document metadata to every chunk. Does not generate embeddings or write to the vector store.
+Reads PDF files from `data/raw/`, extracts clean text, applies character-based chunking (1500 chars, 200 overlap), attaches metadata (document_type, product_family, section_heading, chunk_id), and writes JSONL chunk records to `data/processed/`. Does not generate embeddings or write to the vector store.
 
 ## Inputs
 

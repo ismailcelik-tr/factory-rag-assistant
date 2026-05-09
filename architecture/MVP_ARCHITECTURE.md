@@ -18,37 +18,44 @@ There are two separate pipelines. They share the same vector store but run at di
        ▼
   ┌──────────────────────┐
   │  Document Loader     │  LangChain PyPDFLoader
-  │  app/ingestion/      │  extracts text + page numbers
-  │  loader.py           │
+  │  app/ingestion/      │  extracts text + page numbers (0-indexed;
+  │  loader.py           │  add 1 in metadata step)
   └──────────┬───────────┘
              │  List[Document(page_content, metadata)]
              ▼
   ┌──────────────────────┐
   │  Text Splitter       │  LangChain RecursiveCharacterTextSplitter
-  │  app/ingestion/      │  512 tokens, 64 overlap, sentence boundaries
+  │  app/ingestion/      │  1500 chars, 200 overlap (≈ 300–400 tokens)
   │  chunker.py          │  preserves page_number, source_file in metadata
   └──────────┬───────────┘
              │  List[Chunk]
              ▼
   ┌──────────────────────┐
-  │  Metadata Enricher   │  custom: adds document_type, product_family,
-  │  app/ingestion/      │  section_heading heuristic, chunk_id
-  │  metadata.py         │
+  │  Metadata Enricher   │  adds document_type, product_family,
+  │  app/ingestion/      │  section_heading (plain-text heuristic),
+  │  metadata.py         │  chunk_id, token_count (word count approx)
   └──────────┬───────────┘
-             │  List[EnrichedChunk]
+             │  List[dict]  ← enriched chunk records
+             ▼
+  ┌──────────────────────┐
+  │  JSONL Writer        │  one file per source doc
+  │  app/ingestion/      │  data/processed/<stem>.jsonl
+  │  metadata.py         │  inspectable; re-embed without re-parsing
+  └──────────┬───────────┘
+             │  (separate operation — run embedder after ingestion)
              ▼
   ┌──────────────────────┐
   │  Embedding Model     │  OllamaEmbeddings(model="nomic-embed-text")
-  │  app/embeddings/     │  via LangChain's Ollama integration
+  │  app/embeddings/     │  reads from data/processed/ JSONL
   │  embedder.py         │
   └──────────┬───────────┘
              │  List[vector]
              ▼
   ┌──────────────────────┐
-  │  Vector Store        │  ChromaDB persistent client
+  │  Vector Store        │  ChromaDB PersistentClient
   │  app/embeddings/     │  collection: "factory_docs"
-  │  store.py            │  stored at: data/embeddings/
-  └──────────────────────┘
+  │  store.py            │  hnsw:space = cosine  ← must be explicit
+  └──────────────────────┘  stored at: data/embeddings/
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -81,7 +88,7 @@ There are two separate pipelines. They share the same vector store but run at di
              ▼
   ┌──────────────────────┐
   │  LLM Provider        │  OllamaProvider → POST localhost:11434
-  │  app/llm/            │  model: gemma4, temp: 0.1, max_tokens: 600
+  │  app/llm/            │  model: gemma4:e4b, temp: 0.1, max_tokens: 600
   │  ollama_provider.py  │
   └──────────┬───────────┘
              │  raw_response: str
@@ -168,7 +175,7 @@ app/
     }
   ],
   "role": "rd_engineer",
-  "model": "gemma4",
+  "model": "gemma4:e4b",
   "chunks_used": 3
 }
 ```
@@ -273,7 +280,7 @@ All runtime configuration lives in `app/config.py` using `pydantic-settings`. Va
 class Settings(BaseSettings):
     # Ollama
     ollama_base_url: str = "http://localhost:11434"
-    llm_model: str = "gemma4"
+    llm_model: str = "gemma4:e4b"
     embedding_model: str = "nomic-embed-text"
 
     # Retrieval
@@ -322,12 +329,12 @@ This boundary is intentional. If LangChain is found outside these four files, it
 
 | Parameter | Value | Rationale |
 |-----------|-------|-----------|
-| Target chunk size | 512 tokens | Fits comfortably within nomic-embed-text's 512-token limit |
-| Overlap | 64 tokens | ~12% overlap preserves sentence context across boundaries |
+| Chunk size | 1500 characters | ≈ 300–400 tokens for English technical text; within nomic-embed-text's 512-token limit |
+| Overlap | 200 characters | ≈ 13% overlap; preserves sentence context across boundaries |
 | Splitter | `RecursiveCharacterTextSplitter` | Respects paragraph → sentence → word boundaries in that order |
 | Separators | `["\n\n", "\n", ". ", " "]` | Matches PDF structure (double-newline = paragraph break) |
 
-These values are starting points. Phase 3 evaluation will test 256 and 768 token variants.
+**Units are characters, not tokens.** `RecursiveCharacterTextSplitter.chunk_size` is always in characters. The token estimate assumes average English word length. Phase 3 evaluation will test 1000 and 2000 character variants.
 
 ---
 
@@ -340,7 +347,7 @@ At query time with all components loaded:
 | macOS + background apps | ~4.0 GB |
 | Python process (FastAPI + LangChain + ChromaDB) | ~0.8 GB |
 | nomic-embed-text (Ollama, loaded) | ~0.5 GB |
-| Gemma 4 4B (Ollama, 4-bit quantised) | ~3.5 GB |
+| gemma4:e4b (Ollama) | ~3.5 GB |
 | ChromaDB (index in memory, ~50k chunks) | ~0.5 GB |
 | **Total** | **~9.3 GB** |
 | **Headroom** | **~6.7 GB** |

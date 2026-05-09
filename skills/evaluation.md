@@ -116,7 +116,7 @@ Output to `evals/results/<timestamp>-<tag>.json`:
   "run_id": "2025-01-15T14:32:00Z-baseline",
   "dataset": "evals/datasets/smoke_test.jsonl",
   "mode": "full",
-  "config": { "top_k": 5, "embedding_model": "nomic-embed-text", "llm": "gemma4" },
+  "config": { "top_k": 5, "embedding_model": "nomic-embed-text", "llm": "gemma4:e4b" },
   "summary": {
     "hit_rate_at_5": 0.84,
     "mrr": 0.71,

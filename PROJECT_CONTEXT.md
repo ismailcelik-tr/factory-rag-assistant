@@ -68,11 +68,11 @@ Each chunk carries metadata: `source_file`, `page_number`, `section_heading`, `d
 
 ### 4. Chunking Strategy
 
-**Decision**: `RecursiveCharacterTextSplitter` (LangChain), 512-token target, 64-token overlap, sentence boundaries, separators `["\n\n", "\n", ". ", " "]`.
+**Decision**: `RecursiveCharacterTextSplitter` (LangChain), 1500-character chunks, 200-character overlap, separators `["\n\n", "\n", ". ", " "]`.
 
-**Why**: Fixed-size character splitting loses sentence context. Recursive splitting tries paragraph → sentence → word boundaries in order, which matches PDF document structure. 512 tokens matches nomic-embed-text's context window exactly.
+**Why**: `RecursiveCharacterTextSplitter.chunk_size` is in characters, not tokens. 1500 characters ≈ 300–400 tokens for English technical text, which fits within nomic-embed-text's 512-token context window with headroom. No tokenizer dependency required.
 
-**To be validated**: Phase 3 evaluation will test 256 and 768 token variants against a ground-truth dataset. No chunk size change is adopted without a before/after metric comparison.
+**To be validated**: Phase 3 evaluation will test 1000 and 2000 character variants. No chunk size change is adopted without a before/after metric comparison.
 
 ### 5. Citations as a First-Class Feature
 

@@ -14,7 +14,7 @@ The project roadmap broken into four phases. Each phase has a clear definition o
 
 **Ingestion pipeline** (`app/ingestion/`)
 - `loader.py` — PyPDFLoader wrapper, returns LangChain `Document` list with page numbers
-- `chunker.py` — RecursiveCharacterTextSplitter, 512-token target, 64-token overlap
+- `chunker.py` — RecursiveCharacterTextSplitter, 1500-character chunks, 200-character overlap
 - `metadata.py` — enriches chunks with `document_type`, `product_family`, `section_heading` (heuristic), `chunk_id`
 
 **Embedding + storage** (`app/embeddings/`)

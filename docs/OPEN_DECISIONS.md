@@ -1,51 +1,25 @@
 # OPEN_DECISIONS.md
 
-Decisions that must be made before or during Phase 1 implementation. Grouped by urgency.
-
-Each entry states the issue clearly, the options available, and a recommended default. If the default is strong, follow it and close the decision. If genuine uncertainty exists, it is called out explicitly.
+All Phase 1 decisions are resolved. The tracker at the bottom is the quick reference. Each entry below states the final decision and what it concretely means for implementation.
 
 ---
 
-## Blockers — Resolve Before Writing Any Code
+## OD-001 — LLM model tag ✅ RESOLVED
 
-These will cause implementation to fail or produce silent correctness bugs if not resolved first.
+**Decision**: `gemma4:e4b`
 
----
+Model is already available via Ollama (`ollama list` confirms it). All references updated.
 
-### OD-001 — Verify Gemma 4 Ollama model tag
-
-**Issue**: Every document uses `ollama pull gemma4` and `model: "gemma4"`, but Ollama model tags are version-specific and must match what Ollama actually registers. If the tag is wrong, every LLM call silently fails.
-
-**Check**:
-```bash
-ollama pull gemma3          # Gemma 3 (confirmed available as of early 2025)
-ollama list                 # shows what was actually registered
-```
-
-**Options**:
-- If Gemma 4 is available on Ollama: confirm the exact tag (may be `gemma4`, `gemma4:4b`, `gemma4:latest`, or similar)
-- If Gemma 4 is not yet on Ollama: use `gemma3:4b` and update all references
-
-**Action**: Run `ollama pull gemma4` before writing any code. If it fails, fall back to `gemma3:4b`. Update `app/config.py` default and `CLAUDE.md` commands with the correct tag.
-
-**Close condition**: `ollama list` shows the model as available, model name is confirmed in `app/config.py`.
+**Applies to**:
+- `app/config.py` default: `llm_model: str = "gemma4:e4b"`
+- `CLAUDE.md` commands: `ollama pull gemma4:e4b`
+- `architecture/MVP_ARCHITECTURE.md` memory budget table
 
 ---
 
-### OD-002 — Create `pyproject.toml` with pinned dependencies
+## OD-002 — `pyproject.toml` with pinned dependencies ✅ RESOLVED
 
-**Issue**: No `pyproject.toml` exists. `pip install -e ".[dev]"` cannot run. Nothing can be installed. This is a complete blocker.
-
-**LangChain package fragmentation note**: LangChain has been split into separate packages. The correct imports are:
-
-| What we need | Package to install | Import path |
-|---|---|---|
-| `PyPDFLoader` | `langchain-community` | `from langchain_community.document_loaders import PyPDFLoader` |
-| `RecursiveCharacterTextSplitter` | `langchain-text-splitters` | `from langchain_text_splitters import RecursiveCharacterTextSplitter` |
-| `OllamaEmbeddings` | `langchain-ollama` | `from langchain_ollama import OllamaEmbeddings` |
-| `Chroma` (LangChain wrapper) | `langchain-chroma` | `from langchain_chroma import Chroma` |
-
-**Required dependencies for MVP** (to be confirmed with actual install and import checks):
+**Decision**: Create `pyproject.toml` as the first file. Use the package list below with minor-version pins (`x.y.*`). Do not use `langchain` base package — use the four split packages only.
 
 ```toml
 [project]
@@ -71,211 +45,164 @@ dev = [
     "pytest==8.*",
     "ruff==0.8.*",
 ]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
 ```
 
-**Action**: Create `pyproject.toml` as the first file in Phase 1. Verify all imports work after `pip install -e ".[dev]"`.
+**Import paths to use** (not `langchain.*`):
 
-**Close condition**: `python -c "from langchain_community.document_loaders import PyPDFLoader"` runs without error.
+| LangChain component | Import |
+|---|---|
+| `PyPDFLoader` | `from langchain_community.document_loaders import PyPDFLoader` |
+| `RecursiveCharacterTextSplitter` | `from langchain_text_splitters import RecursiveCharacterTextSplitter` |
+| `OllamaEmbeddings` | `from langchain_ollama import OllamaEmbeddings` |
+| `Chroma` | `from langchain_chroma import Chroma` |
 
----
-
-### OD-003 — Resolve pipeline architecture inconsistency: JSONL stage vs. direct-to-ChromaDB
-
-**Issue**: Two documents contradict each other on whether `data/processed/` (JSONL) is part of the MVP pipeline.
-
-- `AGENTS.md` and `skills/document_ingestion.md` describe a two-stage pipeline: ingestion writes JSONL to `data/processed/`, then embedding reads JSONL and writes to ChromaDB.
-- `architecture/MVP_ARCHITECTURE.md` pipeline diagram goes directly: `Loader → Splitter → Metadata Enricher → Embedder → Vector Store`, with no JSONL step.
-
-**Implications of each approach**:
-
-| Approach | Pros | Cons |
-|---|---|---|
-| Two-stage (JSONL + ChromaDB) | Can re-embed without re-parsing; inspectable intermediate output; agents are cleanly separated | More moving parts; more code to write |
-| Single-stage (direct to ChromaDB) | Simpler; fewer files; less code | Can't re-embed without re-parsing; no inspectable intermediate; breaks agent boundary in `AGENTS.md` |
-
-**Recommendation**: **Two-stage** for MVP. The ability to re-embed without re-parsing matters when experimenting with embedding models in Phase 3. The JSONL files are also useful for debugging (you can read them in a text editor to verify chunking quality without querying ChromaDB). The extra code is one function in `ingestion-agent`.
-
-**Action**: Update `MVP_ARCHITECTURE.md` pipeline diagram to include the JSONL write step between metadata enrichment and embedding. The pipeline becomes: `Loader → Splitter → Metadata → JSONL write → Embedder → ChromaDB`.
-
-**Close condition**: `MVP_ARCHITECTURE.md` and `AGENTS.md` agree on the pipeline stages.
+**Verify after install**: `python -c "from langchain_community.document_loaders import PyPDFLoader; print('ok')"` must print `ok`.
 
 ---
 
-## Should Decide Before Writing Code
+## OD-003 — Pipeline: JSONL stage vs. direct-to-ChromaDB ✅ RESOLVED
 
-These are not outright blockers but will require awkward refactoring if decided wrong and discovered later.
+**Decision**: Two-stage pipeline. Ingestion writes JSONL to `data/processed/`. Embedding reads JSONL and writes to ChromaDB. These are two separate operations.
+
+**Pipeline is**:
+```
+Loader → Splitter → Metadata Enricher → JSONL write (data/processed/)
+                                              ↓
+                                       Embedder → ChromaDB (data/embeddings/)
+```
+
+**Applies to**: `MVP_ARCHITECTURE.md` pipeline diagram must match this. `AGENTS.md` already matches.
 
 ---
 
-### OD-004 — Character vs. token chunking
+## OD-004 — Chunking units ✅ RESOLVED
 
-**Issue**: The architecture says "512-token target" for chunk size, but `RecursiveCharacterTextSplitter`'s `chunk_size` parameter is in characters by default. Without a custom `length_function`, you get ~512 characters — roughly 100–130 tokens — which is far smaller than intended.
+**Decision**: Character-based. `chunk_size=1500`, `chunk_overlap=200`. No tokenizer dependency.
 
-**To get true token-based chunking**, you must pass a tokenizer as `length_function`:
 ```python
-import tiktoken
-enc = tiktoken.get_encoding("cl100k_base")
-splitter = RecursiveCharacterTextSplitter(
-    chunk_size=512,
-    chunk_overlap=64,
-    length_function=lambda text: len(enc.encode(text)),
+RecursiveCharacterTextSplitter(
+    chunk_size=1500,
+    chunk_overlap=200,
+    separators=["\n\n", "\n", ". ", " "],
 )
 ```
 
-**Alternatives**:
-- Use token-based chunking with tiktoken (adds a dependency; requires a decision on which tokenizer to use — `cl100k_base` is OpenAI's, not Gemma's, but is a reasonable approximation)
-- Use character-based chunking with a larger value (~2000 characters ≈ 512 tokens for English text) and accept approximate sizing
-- Accept the discrepancy and use `chunk_size=2000` characters without calling it "tokens" in the documentation
+1500 characters ≈ 300–400 tokens for English technical text. This stays comfortably within nomic-embed-text's 512-token context window.
 
-**Recommendation**: Use **character-based chunking with `chunk_size=1500`, `chunk_overlap=200`**. This gives approximately 300–400 tokens per chunk for English technical text — within nomic-embed-text's 512-token context window — without adding a tokenizer dependency. Rename the parameter description in the docs from "512 tokens" to "~1500 characters (approx. 300–400 tokens)". This is simpler, transparent about what it actually does, and avoids a dependency on a tokenizer that is not otherwise needed.
-
-**Action**: Decide which approach to use and update `MVP_ARCHITECTURE.md`, `PROJECT_CONTEXT.md`, and `skills/document_ingestion.md` to use consistent language.
-
-**Close condition**: Chunk size parameter is specified in the same units everywhere, and the value used matches the unit.
+**Do not use** the phrase "512-token chunks" anywhere in the codebase or documentation. Use "~1500-character chunks" instead. Anywhere existing docs say "512 tokens" for chunk size, the value is wrong and must be updated.
 
 ---
 
-### OD-005 — ChromaDB distance metric configuration
+## OD-005 — ChromaDB distance metric ✅ RESOLVED
 
-**Issue**: The architecture specifies "cosine similarity search" but ChromaDB defaults to squared L2 (Euclidean) distance. Without explicit configuration, retrieval results are scored differently than expected, and the top-k results may not be the same as they would be under cosine similarity. This is a silent correctness issue.
+**Decision**: Cosine similarity, set explicitly at collection creation.
 
-**Fix**: When creating the ChromaDB collection, specify the distance metric:
 ```python
-collection = client.get_or_create_collection(
-    name="factory_docs",
-    metadata={"hnsw:space": "cosine"}
+client.get_or_create_collection(
+    name=settings.collection_name,
+    metadata={"hnsw:space": "cosine"},
 )
 ```
 
-**Important**: This must be set at collection creation time. Changing it later requires deleting and recreating the collection and re-embedding all documents.
-
-**Recommendation**: Always use cosine. Specify it explicitly. Document it in `store.py`.
-
-**Action**: Add this to `store.py` implementation notes in `MVP_ARCHITECTURE.md`. Note that changing the metric requires a full re-embed.
-
-**Close condition**: `MVP_ARCHITECTURE.md` specifies the ChromaDB cosine configuration explicitly.
+This line must appear in `store.py`. If it is absent, ChromaDB silently uses L2 distance and retrieval results are wrong. The metric cannot be changed after collection creation without dropping the collection and re-embedding all documents.
 
 ---
 
-### OD-006 — Ollama API endpoint and request format
+## OD-006 — Ollama API endpoint and request format ✅ RESOLVED
 
-**Issue**: The architecture says `POST localhost:11434` without specifying which Ollama endpoint. Ollama has two relevant endpoints:
+**Decision**: `POST /api/chat` with `"stream": false`.
 
-| Endpoint | Format | Use case |
-|---|---|---|
-| `POST /api/generate` | `{model, prompt, stream}` | Single-turn completion; prompt is a raw string |
-| `POST /api/chat` | `{model, messages: [{role, content}]}` | Chat format with system/user/assistant messages |
-
-**For RAG use cases, `/api/chat` is better** because:
-- The system prompt (base rules + role persona) maps naturally to `role: "system"`
-- The user query maps to `role: "user"`
-- The context blocks are injected into either the system or user message (see OD-007)
-- Most Gemma fine-tunes are instruction-tuned for chat format, not raw completion
-
-**Recommendation**: Use `/api/chat`. The assembled prompt becomes:
-```json
-{
-  "model": "gemma4",
-  "messages": [
-    {"role": "system", "content": "<base rules> + <role template>"},
-    {"role": "user", "content": "<context blocks>\n\nQuestion: <query>"}
-  ],
-  "options": {"temperature": 0.1},
-  "stream": false
+```python
+payload = {
+    "model": settings.llm_model,
+    "messages": [
+        {"role": "system", "content": system_prompt},
+        {"role": "user",   "content": user_message},
+    ],
+    "options": {
+        "temperature": settings.llm_temperature,
+        "num_predict": settings.llm_max_tokens,
+    },
+    "stream": False,
 }
+response = httpx.post(f"{settings.ollama_base_url}/api/chat", json=payload, timeout=120.0)
+return response.json()["message"]["content"]
 ```
 
-**Action**: Update `ollama_provider.py` implementation notes to specify `/api/chat` format. Add `"stream": false` explicitly (Ollama streams by default — if not disabled, the response handling must read a streaming response, which adds complexity with no MVP benefit).
-
-**Close condition**: `MVP_ARCHITECTURE.md` specifies the Ollama endpoint, request format, and `stream: false`.
+`stream: False` is mandatory — Ollama streams by default and the streaming response format is different. `timeout=120.0` is necessary; Gemma on CPU can take 30–90 seconds for a complex answer.
 
 ---
 
-### OD-007 — How base system prompt and role template combine in `assembler.py`
+## OD-007 — Prompt assembly structure ✅ RESOLVED
 
-**Issue**: Both `prompts/system/base.md` and `prompts/roles/<role>.md` exist, but `assembler.py`'s combination logic is never specified. Questions not answered anywhere:
-- Does base come before or after the role template?
-- Does the role template replace the base, or extend it?
-- Does the context go in the system message or the user message?
-- Does the base repeat rules that are already in the role template (e.g., both say "cite every claim") — is that intentional?
-
-**Recommendation**: Use this structure for the Ollama `/api/chat` call:
+**Decision**: System message = `base.md` + `"\n\n"` + role template. User message = formatted context blocks + `"\n\nQuestion: "` + query.
 
 ```
-system message = base.md content + "\n\n" + role_template.md content
-user message   = formatted context blocks + "\n\nQuestion: " + query
+system_prompt = base.md content + "\n\n" + prompts/roles/<role>.md content
+user_message  = "Context:\n\n" + [formatted chunk blocks] + "\n\nQuestion: " + query
 ```
 
-**Rationale**:
-- Base provides universal rules (no hallucination, citation format, context-only answers)
-- Role template provides persona and audience-specific framing
-- Context in the user message matches the conversational model — the "user" is providing the relevant excerpts and asking a question
-- Repetition of citation rules across base and role is intentional redundancy: small models need the instruction reinforced
+Each context block is formatted as:
+```
+[Source: <filename> | Page <N> | Section: <heading>]
+<chunk text>
+```
 
-**Action**: Document this assembly structure explicitly in `MVP_ARCHITECTURE.md` under the prompt assembler section.
+The repetition of citation rules between `base.md` and the role template is intentional. Small models need the instruction reinforced in both the universal rules and the role persona.
 
-**Close condition**: `assembler.py`'s construction logic is described in `MVP_ARCHITECTURE.md` as a concrete string assembly specification.
-
----
-
-### OD-008 — PDF loader for heading detection: PyPDFLoader vs. PyMuPDF
-
-**Issue**: `skills/document_ingestion.md` describes heading detection using font size and formatting heuristics. But `PyPDFLoader` (LangChain) extracts plain text only — no font metadata. Font-based heading detection requires PyMuPDF (`fitz`), which is a separate library.
-
-**Options**:
-
-| Approach | Library | Heading quality | Complexity |
-|---|---|---|---|
-| Plain-text heuristics only | `PyPDFLoader` (already planned) | Low — all-caps, blank-line detection only | Simple |
-| Font-based detection | `PyMuPDF` (`fitz`) | High — actual heading detection | Medium — need to write a custom loader |
-| LangChain + PyMuPDF together | Both | High for headings, uses LangChain for splitting | Two PDF libraries |
-
-**Recommendation**: **Plain-text heuristics via `PyPDFLoader` for MVP**. Accept that heading detection will be imprecise — many chunks will have `"[No Heading]"` or a parent section heading from a heuristic. This is acceptable for MVP: citations will still have accurate `source_file` and `page_number`. Heading accuracy is a quality improvement for Phase 3.
-
-Update `skills/document_ingestion.md` to remove the font-size detection description (which is misleading given `PyPDFLoader`) and replace with the actual plain-text heuristics that will be implemented: look for lines that are short, followed by a newline, all-uppercase, or match common section number patterns like `"1.2 "`, `"Section 3"`.
-
-**Action**: Remove font-based heading claims from `skills/document_ingestion.md`. Add plain-text heuristic specification.
-
-**Close condition**: Heading detection approach in docs matches what `PyPDFLoader` can actually provide.
+If `prompts/roles/<role>.md` does not exist, `assembler.py` raises `FileNotFoundError`. This is correct — do not add a silent fallback.
 
 ---
 
-## Can Decide During Implementation
+## OD-008 — PDF heading detection approach ✅ RESOLVED
 
-These do not require upfront decisions but should be documented once decided.
+**Decision**: `PyPDFLoader` (plain text only) with plain-text heuristics. No PyMuPDF, no font detection.
 
----
+**Heading detection heuristics** (applied to each chunk's text, scanning line by line before the first sentence-ending punctuation):
 
-### OD-009 — Test document for smoke test
+1. Line is all-uppercase and shorter than 60 characters
+2. Line matches `r"^\d+(\.\d+)*\s+[A-Z]"` — e.g., `"3.2 Motor Calibration"`
+3. Line matches `r"^(Section|Chapter|Part)\s+\d"` (case-insensitive)
+4. If none of the above match: carry the last matched heading forward across chunks from the same document (tracked via an accumulator in the `enrich()` function)
+5. If no heading has ever been found in the document: use `"[No Heading]"`
 
-**Issue**: `scripts/smoke_test.py` ingests "one test PDF" but no test document exists in the repository. A developer starting fresh has nothing to test with.
-
-**Options**:
-- Commit a small public-domain or openly licensed factory-relevant PDF to `data/raw/samples/`
-- Document that the developer must provide their own document
-- Use a generated minimal PDF as a fixture
-
-**Recommendation**: Commit a small sample document (1–3 pages) to `data/raw/samples/sample_manual.pdf`. Use a public-domain technical document or generate one specifically for testing. The smoke test should reference this file by path. This makes `scripts/smoke_test.py` runnable without any prerequisite action.
-
-**Close condition**: `data/raw/samples/` contains at least one PDF, and `scripts/smoke_test.py` references it by relative path.
+The `section_heading` field will be approximate for many documents. This is acceptable for MVP — citations still have accurate `source_file` and `page_number`. Heading accuracy is deferred to Phase 3 (possible upgrade: add PyMuPDF as an opt-in loader).
 
 ---
 
-### OD-010 — Citation source_file format: filename only vs. relative path
+## OD-009 — Test document for smoke test ✅ RESOLVED
 
-**Issue**: The citation schema uses `source_file: str`. In metadata stored by the ingestion pipeline, `source_file` will be the full relative path (`data/raw/X200_user_manual.pdf`). In the citation format the LLM is instructed to produce, only the filename is used (`X200_user_manual.pdf`). `parser.py` will need to normalize between these two forms.
+**Decision**: No sample PDF is committed to the repository. `scripts/smoke_test.py` uses the first `.pdf` file found in `data/raw/` (scanned recursively). The developer must place at least one PDF in `data/raw/` before running the smoke test.
 
-**Recommendation**: Store the relative path in ChromaDB metadata. In `parser.py`, extract the basename when building `Citation` objects. The API response `source_file` field returns the basename only (cleaner for the client). If a future UI needs to link to the actual file, the full path can be added as a separate field.
+This is documented in `docs/setup.md` under "First Run". Committing a sample PDF is unnecessary complexity (copyright questions, binary file in git, maintenance burden). Any PDF the developer already has works.
 
-**Close condition**: `parser.py` implementation note in `MVP_ARCHITECTURE.md` specifies that `source_file` in the `Citation` object is the basename of the stored path.
+`smoke_test.py` fails immediately with a clear message if `data/raw/` contains no PDFs, rather than silently passing with no data.
 
 ---
 
-### OD-011 — `app/` Python package structure
+## OD-010 — Citation `source_file` format ✅ RESOLVED
 
-**Issue**: `app/` and its subdirectories are referenced as importable modules throughout the architecture (`from app.config import settings`, `from app.llm.base import LLMProvider`, etc.), but Python requires `__init__.py` files in each directory for these imports to work.
+**Decision**: Store the full relative path in ChromaDB metadata (`data/raw/X200_user_manual.pdf`). Return only the basename in the API response `Citation` object (`X200_user_manual.pdf`).
 
-**Required `__init__.py` files**:
+`parser.py` uses `Path(raw_path).name` when constructing `Citation` objects from parsed `[cite: ...]` markers.
+
+The LLM citation format instructs the model to use the filename only (not the full path), which is what `[cite: X200_user_manual.pdf, p.4, "..."]` already shows. The `source_file` field in `ChromaDB` metadata stores the full path for internal use. These two are reconciled in `parser.py`.
+
+---
+
+## OD-011 — Python package `__init__.py` files ✅ RESOLVED
+
+**Decision**: Create empty `__init__.py` in every `app/` subdirectory as part of Step 1 scaffolding.
+
+Required files:
 - `app/__init__.py`
 - `app/api/__init__.py`
 - `app/ingestion/__init__.py`
@@ -284,35 +211,31 @@ These do not require upfront decisions but should be documented once decided.
 - `app/llm/__init__.py`
 - `app/prompts/__init__.py`
 
-All should be empty files. This is not an architectural decision — it is a mechanical requirement. Create them as part of the initial scaffolding step.
-
-**Close condition**: All `__init__.py` files exist before the first `import` statement is written.
+All are empty. Create before writing any other Python file.
 
 ---
 
-### OD-012 — Config file naming: `app/config.py` vs. `app/llm/config.py`
+## OD-012 — Config file naming ✅ RESOLVED
 
-**Issue**: `CLAUDE.md` says "Provider configuration lives in `app/llm/config.py`" but `MVP_ARCHITECTURE.md` and the Pydantic settings block are in `app/config.py`. All settings — including LLM model name — belong in `app/config.py`. There is no separate `app/llm/config.py`.
+**Decision**: One config file: `app/config.py`. There is no `app/llm/config.py`.
 
-**Action**: Fix the CLAUDE.md reference to remove the mention of `app/llm/config.py`. Only `app/config.py` exists.
-
-**Close condition**: CLAUDE.md references `app/config.py` consistently.
+The stale reference in `CLAUDE.md` has been corrected. All modules import from `app.config`.
 
 ---
 
 ## Decision Status Tracker
 
-| ID | Title | Status |
-|----|-------|--------|
-| OD-001 | Gemma 4 Ollama model tag | Open — verify before first code |
-| OD-002 | `pyproject.toml` with dependencies | Open — first file to create |
-| OD-003 | JSONL stage vs. direct-to-ChromaDB | Recommended: two-stage |
-| OD-004 | Character vs. token chunking | Recommended: characters (~1500) |
-| OD-005 | ChromaDB distance metric | Recommended: cosine, explicit config |
-| OD-006 | Ollama API endpoint | Recommended: `/api/chat`, stream: false |
-| OD-007 | Prompt assembly structure | Recommended: system = base + role, user = context + query |
-| OD-008 | PDF loader for heading detection | Recommended: PyPDFLoader + plain-text heuristics |
-| OD-009 | Test document for smoke test | Open — commit a sample PDF |
-| OD-010 | Citation source_file format | Recommended: basename in API response |
-| OD-011 | `app/` Python package `__init__.py` | Mechanical — create all of them |
-| OD-012 | Config file naming inconsistency | Fix CLAUDE.md reference |
+| ID | Title | Status | Final Decision |
+|----|-------|--------|---------------|
+| OD-001 | LLM model tag | ✅ Resolved | `gemma4:e4b` |
+| OD-002 | `pyproject.toml` | ✅ Resolved | 4 LangChain split packages + chromadb 0.5 + httpx + pinned versions |
+| OD-003 | Pipeline stages | ✅ Resolved | Two-stage: JSONL then ChromaDB |
+| OD-004 | Chunk sizing units | ✅ Resolved | 1500 chars / 200 overlap, character-based |
+| OD-005 | ChromaDB distance metric | ✅ Resolved | Cosine, `{"hnsw:space": "cosine"}` at creation |
+| OD-006 | Ollama endpoint | ✅ Resolved | `/api/chat`, `stream: false`, timeout 120s |
+| OD-007 | Prompt assembly | ✅ Resolved | system = base + role template; user = context + question |
+| OD-008 | Heading detection | ✅ Resolved | PyPDFLoader + 3 plain-text regex heuristics + carry-forward |
+| OD-009 | Smoke test document | ✅ Resolved | No committed sample; use first PDF found in data/raw/ |
+| OD-010 | Citation source_file | ✅ Resolved | Store full path in ChromaDB; return basename in API |
+| OD-011 | `__init__.py` files | ✅ Resolved | Empty files in all app/ subdirs, created in Step 1 |
+| OD-012 | Config file naming | ✅ Resolved | `app/config.py` only; CLAUDE.md corrected |

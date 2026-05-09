@@ -102,7 +102,7 @@ If the response contains zero citations, do not return it as-is. Either:
     }
   ],
   "role": "tech_service",
-  "model": "gemma4",
+  "model": "gemma4:e4b",
   "context_chunks_used": 4,
   "prompt_tokens": 1842
 }

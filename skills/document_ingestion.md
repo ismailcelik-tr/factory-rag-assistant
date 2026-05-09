@@ -31,35 +31,40 @@ If ambiguous, ask the user before proceeding.
 
 Use the appropriate parser for the file type:
 
-- `.pdf` → PyMuPDF (preferred) or pdfplumber. Preserve page numbers.
-- `.docx` → python-docx. Preserve headings.
-- `.xlsx` / `.csv` → pandas. Treat each row as a record.
+- `.pdf` → `PyPDFLoader` (LangChain). Returns plain text + page number per page. No font metadata.
+- `.docx` → out of MVP scope; document for Phase 2
+- `.xlsx` / `.csv` → out of MVP scope; document for Phase 2
 
-Cleaning rules:
-- Strip headers, footers, page number artefacts
-- Normalize whitespace (no consecutive blank lines > 1)
-- Preserve section headings — they become chunk metadata
+Cleaning notes:
+- `PyPDFLoader` returns raw extracted text. Some PDFs produce noisy output (hyphenated line breaks, extracted headers/footers mixed in). Accept this for MVP — cleaning is a Phase 3 improvement.
+- PyPDF page numbers are 0-indexed. Add 1 in the metadata step.
 
 ### 3. Detect section headings
 
-Use heuristics appropriate to the file type:
+`PyPDFLoader` returns plain text only — no font size, no style information. Use plain-text heuristics only.
 
-- PDF: lines in larger font, all-caps, or followed by a blank line
-- DOCX: elements with `Heading` style
-- Fall back to line-length heuristics if structural markers are absent
+Scan each chunk's text line by line, looking for a heading before the first sentence-ending punctuation:
 
-Track the current heading as chunks are created.
+1. Line is all-uppercase and shorter than 60 characters → heading
+2. Line matches `r"^\d+(\.\d+)*\s+[A-Z]"` (e.g. `"3.2 Motor Calibration"`) → heading
+3. Line matches `r"^(Section|Chapter|Part)\s+\d"` (case-insensitive) → heading
+4. If none match: carry the last matched heading forward across subsequent chunks from the same document
+5. If no heading has ever matched in the document: use `"[No Heading]"`
+
+These heuristics will miss headings in many real PDFs. That is acceptable for MVP — `source_file` and `page_number` are always accurate, and heading quality is a Phase 3 improvement (possible upgrade: PyMuPDF for font-based detection).
 
 ### 4. Chunk the text
 
-Target: **512 tokens**, overlap: **64 tokens**, boundary: sentence-level (never split mid-sentence).
+Chunk size: **1500 characters**, overlap: **200 characters**.
 
-```
-while text remaining:
-    take up to 512 tokens
-    if mid-sentence, extend to sentence boundary (max +50 tokens)
-    record chunk with current heading and page number
-    step back 64 tokens for overlap
+`RecursiveCharacterTextSplitter.chunk_size` is in characters, not tokens. 1500 characters ≈ 300–400 tokens for English technical text. Do not add a tokenizer dependency to enforce token counts.
+
+```python
+RecursiveCharacterTextSplitter(
+    chunk_size=1500,
+    chunk_overlap=200,
+    separators=["\n\n", "\n", ". ", " "],
+)
 ```
 
 ### 5. Assign chunk IDs
@@ -100,9 +105,9 @@ Before finishing:
 
 | Problem | How to handle |
 |---------|--------------|
-| Scanned PDF (no text layer) | Log a warning, skip the file, report to user — do not attempt OCR silently |
-| Heading detection fails | Use `"[No Heading]"` — never leave blank, never guess |
-| Token count exceeds hard cap | Raise an error with the offending chunk ID |
+| Scanned PDF (no text layer) | `PyPDFLoader` returns empty `page_content`. Log a warning, skip the file, report in ingest response — do not attempt OCR |
+| Heading detection finds nothing | Use `"[No Heading]"` — never leave the field blank |
+| Chunk character count > 2000 | Log a warning (soft limit — `RecursiveCharacterTextSplitter` enforces the split at 1500 chars, so this should not occur in practice) |
 | Mixed-language document | Log a warning, proceed — language detection is not in scope for v1 |
 
 ---
