@@ -9,10 +9,14 @@ synthetic LangChain Documents so they run offline with no dependencies on
 Ollama, ChromaDB, or any PDF files.
 """
 
+import json
+import tempfile
+from pathlib import Path
+
 from langchain_core.documents import Document
 
 from app.ingestion.chunker import split_documents
-from app.ingestion.metadata import _detect_heading, _infer_document_type, enrich
+from app.ingestion.metadata import _detect_heading, _infer_document_type, enrich, save_chunks
 
 # ---------------------------------------------------------------------------
 # chunker
@@ -270,3 +274,75 @@ class TestEnrich:
     def test_empty_input(self):
         result = enrich([])
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# save_chunks
+# ---------------------------------------------------------------------------
+
+
+class TestSaveChunks:
+    def _make_chunks(self, source: str = "data/raw/manual.pdf", n: int = 3) -> list[dict]:
+        docs = [
+            Document(page_content=f"Content block {i}.", metadata={"source": source, "page": i})
+            for i in range(n)
+        ]
+        return enrich(docs)
+
+    def test_file_created_in_output_dir(self):
+        chunks = self._make_chunks()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = save_chunks(chunks, tmp)
+            assert path.exists()
+
+    def test_filename_derived_from_source_stem(self):
+        chunks = self._make_chunks(source="data/raw/X200_manual.pdf")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = save_chunks(chunks, tmp)
+            assert path.name == "X200_manual.jsonl"
+
+    def test_output_dir_created_if_missing(self):
+        chunks = self._make_chunks()
+        with tempfile.TemporaryDirectory() as tmp:
+            nested = Path(tmp) / "sub" / "processed"
+            path = save_chunks(chunks, str(nested))
+            assert path.exists()
+
+    def test_line_count_matches_chunk_count(self):
+        chunks = self._make_chunks(n=5)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = save_chunks(chunks, tmp)
+            lines = path.read_text(encoding="utf-8").splitlines()
+            assert len(lines) == 5
+
+    def test_every_line_is_valid_json(self):
+        chunks = self._make_chunks(n=4)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = save_chunks(chunks, tmp)
+            for line in path.read_text(encoding="utf-8").splitlines():
+                obj = json.loads(line)
+                assert isinstance(obj, dict)
+
+    def test_all_required_fields_present(self):
+        required = {
+            "chunk_id", "text", "source_file", "page_number",
+            "section_heading", "document_type", "product_family", "token_count",
+        }
+        chunks = self._make_chunks()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = save_chunks(chunks, tmp)
+            for line in path.read_text(encoding="utf-8").splitlines():
+                obj = json.loads(line)
+                assert required.issubset(obj.keys())
+
+    def test_empty_input_raises(self):
+        import pytest
+        with tempfile.TemporaryDirectory() as tmp:
+            with pytest.raises(ValueError):
+                save_chunks([], tmp)
+
+    def test_returns_path_object(self):
+        chunks = self._make_chunks()
+        with tempfile.TemporaryDirectory() as tmp:
+            result = save_chunks(chunks, tmp)
+            assert isinstance(result, Path)

@@ -14,6 +14,7 @@ Output schema per chunk:
   token_count    – word count (approximation; sufficient for validation)
 """
 
+import json
 import logging
 import re
 from pathlib import Path
@@ -144,6 +145,36 @@ def enrich(
 
     _validate_and_log(result)
     return result
+
+
+def save_chunks(chunks: list[dict], output_path: str) -> Path:
+    """Write enriched chunks to a JSONL file under output_path.
+
+    One file per source document, named <source_stem>.jsonl.
+    The output directory is created if it does not exist.
+
+    Args:
+        chunks: non-empty list of dicts from enrich() — all must share the
+                same source_file (call once per source document).
+        output_path: directory where the JSONL file will be written.
+
+    Returns:
+        Path to the written file.
+    """
+    if not chunks:
+        raise ValueError("save_chunks() requires at least one chunk.")
+
+    source_stem = Path(chunks[0]["source_file"]).stem
+    out_dir = Path(output_path)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_file = out_dir / f"{source_stem}.jsonl"
+
+    with out_file.open("w", encoding="utf-8") as fh:
+        for chunk in chunks:
+            fh.write(json.dumps(chunk, ensure_ascii=False) + "\n")
+
+    logger.info("Saved %d chunk(s) to %s", len(chunks), out_file)
+    return out_file
 
 
 def _validate_and_log(chunks: list[dict]) -> None:
