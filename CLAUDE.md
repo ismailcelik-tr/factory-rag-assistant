@@ -106,7 +106,7 @@ Use the agents defined in `AGENTS.md` for multi-step pipeline tasks. Use skills 
 
 ## LLM Configuration
 
-The default model is **Gemma 4 via Ollama**. Ensure Ollama is running locally (`ollama serve`) and the model is pulled (`ollama pull gemma4`). Provider configuration lives in `app/llm/config.py` (not yet created). Do not hardcode model names outside that file.
+The default model is **Gemma 4 via Ollama**. Ensure Ollama is running locally (`ollama serve`) and the model is pulled (`ollama pull gemma4`). All provider configuration lives in `app/config.py`. Do not hardcode model names outside that file.
 
 ---
 
