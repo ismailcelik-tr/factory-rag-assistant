@@ -12,22 +12,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-> Commands will be added as the application layer is built. The patterns below define the expected shape — update this section when implementations exist.
-
 ```bash
-# Ingest documents
-python scripts/ingest.py --input data/raw/ --output data/processed/
+# Install dependencies
+pip install -e ".[dev]"
 
-# Generate embeddings
-python scripts/embed.py --input data/processed/ --store data/embeddings/
+# Start Ollama (must be running before any pipeline step)
+ollama serve
+
+# Pull required models (one-time setup)
+ollama pull gemma4
+ollama pull nomic-embed-text
 
 # Run the API server
 uvicorn app.api.main:app --reload
 
-# Run the CLI assistant
+# Ingest documents from data/raw/
+python scripts/ingest.py
+
+# Interactive CLI query
 python scripts/chat.py --role tech_service
 
-# Run evaluations
+# Smoke test (end-to-end: ingest one doc, ask one question)
+python scripts/smoke_test.py
+
+# Run evaluations (Phase 3)
 python evals/run_evals.py --dataset evals/datasets/smoke_test.jsonl --mode full
 
 # Run tests
@@ -40,29 +48,32 @@ pytest app/tests/test_retrieval.py::test_top_k_returns_five -v
 ruff check app/ scripts/ evals/
 ```
 
+> Commands that reference files not yet created are the next implementation target. See `docs/ROADMAP.md` Phase 1.
+
 ---
 
 ## Repository Map
 
 | Path | What lives here |
 |------|----------------|
-| `app/` | Application code: ingestion, embeddings, retrieval, LLM, API, UI |
-| `app/ingestion/` | PDF parsing, chunking, metadata extraction |
-| `app/embeddings/` | Embedding model interface, vector store client |
-| `app/retrieval/` | Query execution, reranking, metadata filtering |
-| `app/llm/` | LLM provider interface + Ollama/cloud implementations |
-| `app/prompts/` | Prompt assembly and role routing logic |
-| `app/api/` | FastAPI application |
+| `app/api/` | FastAPI app, routes (`/ask`, `/ingest`, `/health`), Pydantic schemas |
+| `app/ingestion/` | `loader.py` (PyPDFLoader), `chunker.py` (RecursiveCharacterTextSplitter), `metadata.py` |
+| `app/embeddings/` | `embedder.py` (OllamaEmbeddings / nomic-embed-text), `store.py` (ChromaDB) |
+| `app/retrieval/` | `retriever.py` — cosine similarity search, metadata filter |
+| `app/llm/` | `base.py` (abstract provider), `ollama_provider.py`, `parser.py` (citation extraction) |
+| `app/prompts/` | `assembler.py` — loads role templates, formats context blocks |
+| `app/config.py` | pydantic-settings: all config from `.env` |
+| `prompts/system/` | `base.md` — universal rules for every LLM call |
+| `prompts/roles/` | One `.md` per role — persona, emphasis, length constraints |
 | `agents/` | Claude Code subagent definitions (see `AGENTS.md`) |
 | `skills/` | Reusable Claude Code skill definitions |
-| `prompts/` | Raw prompt templates (system prompts, role templates) |
 | `data/raw/` | Original factory documents — never modified |
-| `data/processed/` | Chunked + metadata-enriched JSONL — generated, not committed |
-| `data/embeddings/` | Vector store artefacts — generated, not committed |
+| `data/processed/` | Generated JSONL — not committed |
+| `data/embeddings/` | ChromaDB artefacts — not committed |
 | `evals/` | Ground-truth QA datasets and evaluation harness |
-| `architecture/` | Architecture diagrams and ADRs |
-| `docs/` | Setup guides, onboarding, design notes |
-| `scripts/` | CLI entry points for pipeline stages |
+| `architecture/` | `overview.md`, `MVP_ARCHITECTURE.md`, `decisions/` (ADRs) |
+| `docs/` | `setup.md`, `ROADMAP.md`, `TECH_STACK_DECISION.md` |
+| `scripts/` | `ingest.py`, `chat.py`, `smoke_test.py` |
 
 ---
 

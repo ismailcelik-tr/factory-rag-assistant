@@ -68,11 +68,11 @@ Each chunk carries metadata: `source_file`, `page_number`, `section_heading`, `d
 
 ### 4. Chunking Strategy
 
-**Decision**: Semantic chunking with 512-token target, 64-token overlap, preserving section headings as chunk metadata.
+**Decision**: `RecursiveCharacterTextSplitter` (LangChain), 512-token target, 64-token overlap, sentence boundaries, separators `["\n\n", "\n", ". ", " "]`.
 
-**Why**: Fixed-size chunking is simpler but loses structural context. Heading-aware chunks improve retrieval precision (a query about "installation step 3" can filter to the Installation section) and make citations more meaningful.
+**Why**: Fixed-size character splitting loses sentence context. Recursive splitting tries paragraph → sentence → word boundaries in order, which matches PDF document structure. 512 tokens matches nomic-embed-text's context window exactly.
 
-**To be validated**: Retrieval quality will be measured in `evals/` against a set of known questions before locking in chunk size.
+**To be validated**: Phase 3 evaluation will test 256 and 768 token variants against a ground-truth dataset. No chunk size change is adopted without a before/after metric comparison.
 
 ### 5. Citations as a First-Class Feature
 
@@ -98,31 +98,36 @@ Each chunk carries metadata: `source_file`, `page_number`, `section_heading`, `d
 
 ## Roadmap
 
-### Phase 1 — Foundation (current)
+### Phase 1 — Working MVP (current)
 - [x] Repository structure and documentation
-- [ ] Document ingestion pipeline (PDF → chunks → metadata)
-- [ ] Embedding generation and vector store setup
-- [ ] Basic retrieval (top-k cosine similarity)
-- [ ] Single-role RAG answer with citations
-- [ ] CLI interface for testing
+- [x] Tech stack decided and documented (`docs/TECH_STACK_DECISION.md`)
+- [x] MVP architecture defined (`architecture/MVP_ARCHITECTURE.md`)
+- [ ] Document ingestion pipeline (`app/ingestion/`)
+- [ ] Embedding generation and vector store (`app/embeddings/`)
+- [ ] Retrieval (`app/retrieval/`)
+- [ ] LLM provider interface (`app/llm/`)
+- [ ] Prompt assembler (`app/prompts/`)
+- [ ] FastAPI application (`app/api/`)
+- [ ] CLI scripts and smoke test
 
-### Phase 2 — Role Routing
-- [ ] Six role prompt templates
-- [ ] Role-aware context assembly
-- [ ] REST API (FastAPI)
-- [ ] Minimal web chat UI
+### Phase 2 — Role Routing + API Hardening
+- [ ] All six role prompts validated on real documents
+- [ ] API versioning (`/api/v1/`)
+- [ ] Structured logging
+- [ ] Stable API reference (`docs/API.md`)
 
-### Phase 3 — Quality
-- [ ] Evaluation harness and ground-truth QA pairs
-- [ ] Retrieval quality metrics (hit rate, MRR)
-- [ ] Answer quality scoring
-- [ ] Reranking experiments
+### Phase 3 — Quality and Evaluation
+- [ ] Ground-truth QA dataset (50+ questions)
+- [ ] Evaluation harness (`evals/run_evals.py`)
+- [ ] Retrieval metrics (hit rate, MRR)
+- [ ] Reranking and chunking experiments
 
 ### Phase 4 — Extension
-- [ ] Mobile API layer
-- [ ] Multi-document product family filtering
-- [ ] Cloud LLM fallback path
+- [ ] Web UI (Next.js)
+- [ ] Cloud LLM fallback (Claude / OpenAI provider)
+- [ ] Document upload via API
 - [ ] Auth and role identity from session
+- [ ] Mobile API documentation
 
 ---
 
