@@ -1,0 +1,33 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+
+# Generated pipeline artefacts — not committed
+data/processed/
+data/embeddings/
+evals/results/
+
+# Raw documents may contain proprietary content — decide per deployment
+# data/raw/  ← uncomment if raw docs should not be committed
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
