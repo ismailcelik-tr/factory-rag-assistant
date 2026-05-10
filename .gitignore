@@ -16,8 +16,8 @@ data/processed/
 data/embeddings/
 evals/results/
 
-# Raw documents may contain proprietary content — decide per deployment
-# data/raw/  ← uncomment if raw docs should not be committed
+# Raw documents may contain proprietary content — not committed
+data/raw/
 
 # IDE
 .vscode/

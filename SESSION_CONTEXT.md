@@ -17,10 +17,10 @@ Implementation state snapshot for session continuation.
 | 4 | Embeddings and vector store | ✅ Done |
 | 5 | Retrieval | ✅ Done |
 | 6 | LLM provider | ✅ Done |
-| 7 | Prompt assembler | ⬜ **Next** |
+| 7 | Prompt assembler | ✅ Done |
 | 8 | Pydantic schemas | ✅ Done |
-| 9 | FastAPI application | ⬜ |
-| 10 | CLI scripts | ⬜ |
+| 9 | FastAPI application | ✅ Done |
+| 10 | CLI scripts | ✅ Done |
 
 ---
 
