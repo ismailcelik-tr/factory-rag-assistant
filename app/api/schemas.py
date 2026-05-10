@@ -23,6 +23,7 @@ class AskRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=2000)
     role: Role
     product_family: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 class Citation(BaseModel):
@@ -51,3 +52,8 @@ class IngestResponse(BaseModel):
     chunks_created: int
     chunks_upserted: int
     errors: list[str]
+
+
+class ErrorResponse(BaseModel):
+    error: str
+    code: str
