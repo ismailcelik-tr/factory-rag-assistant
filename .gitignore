@@ -12,8 +12,8 @@ dist/
 build/
 
 # Generated pipeline artefacts — not committed
-data/processed/
-data/embeddings/
+data/processed*/
+data/embeddings*/
 evals/results/
 
 # Raw documents may contain proprietary content — not committed
