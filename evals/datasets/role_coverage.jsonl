@@ -1,0 +1,6 @@
+{"id": "r001", "question": "What are the operating temperature limits and thermal derating curves?", "role": "rd_engineer", "expected_sources": [], "reference_answer": "PLACEHOLDER", "tags": ["thermal", "specifications"]}
+{"id": "r002", "question": "What is the procedure to replace the drive belt and verify tension?", "role": "tech_service", "expected_sources": [], "reference_answer": "PLACEHOLDER", "tags": ["maintenance", "procedure"]}
+{"id": "r003", "question": "What industry certifications and compliance standards does the product meet?", "role": "sales", "expected_sources": [], "reference_answer": "PLACEHOLDER", "tags": ["certifications", "compliance"]}
+{"id": "r004", "question": "What is the recommended spare parts list for the first year of operation?", "role": "purchasing", "expected_sources": [], "reference_answer": "PLACEHOLDER", "tags": ["spare-parts", "procurement"]}
+{"id": "r005", "question": "What preventive maintenance tasks are required at the 500-hour service interval?", "role": "production", "expected_sources": [], "reference_answer": "PLACEHOLDER", "tags": ["maintenance", "intervals"]}
+{"id": "r006", "question": "How do I register my product for warranty coverage?", "role": "customer_support", "expected_sources": [], "reference_answer": "PLACEHOLDER", "tags": ["warranty", "registration"]}
