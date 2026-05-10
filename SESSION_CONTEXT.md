@@ -14,11 +14,11 @@ Implementation state snapshot for session continuation.
 | 1 | Project scaffolding | ✅ Done |
 | 2 | Ingestion pipeline (loader + chunker + metadata) | ✅ Done |
 | 3 | Write processed JSONL (`save_chunks`) | ✅ Done |
-| 4 | Embeddings and vector store | ⬜ **Next** |
-| 5 | Retrieval | ⬜ |
-| 6 | LLM provider | ⬜ |
-| 7 | Prompt assembler | ⬜ |
-| 8 | Pydantic schemas | ⬜ |
+| 4 | Embeddings and vector store | ✅ Done |
+| 5 | Retrieval | ✅ Done |
+| 6 | LLM provider | ✅ Done |
+| 7 | Prompt assembler | ⬜ **Next** |
+| 8 | Pydantic schemas | ✅ Done |
 | 9 | FastAPI application | ⬜ |
 | 10 | CLI scripts | ⬜ |
 
@@ -44,6 +44,11 @@ Implementation state snapshot for session continuation.
 - `app/ingestion/metadata.py` — added `save_chunks(chunks, output_path) -> Path`
 - `app/tests/test_ingestion.py` — added `TestSaveChunks` (8 tests)
 
+### Step 4
+- `app/embeddings/embedder.py` — `embed_texts(texts) -> list[list[float]]` via `OllamaEmbeddings`
+- `app/embeddings/store.py` — `upsert_chunks()`, `query()`, module-level `client` + `collection` (cosine)
+- `app/tests/test_embeddings.py` — 6 unit tests (always run) + 5 integration tests (skipped without Ollama)
+
 ### Documentation / Architecture (Session 1)
 - `CLAUDE.md`, `PROJECT_CONTEXT.md`, `AGENTS.md`, `architecture/MVP_ARCHITECTURE.md`
 - `architecture/overview.md`, `architecture/decisions/` (ADRs)
@@ -58,11 +63,12 @@ Implementation state snapshot for session continuation.
 ## Test Status
 
 ```
-pytest app/tests/test_ingestion.py -v   →   49 passed in 0.05s
-ruff check app/ingestion/ app/tests/   →   All checks passed
+python -m pytest app/tests/ -m "not integration" -v   →   55 passed, 5 skipped
+ruff check app/embeddings/ app/ingestion/ app/tests/  →   All checks passed
 ```
 
-No other test files exist yet.
+Integration tests in `test_embeddings.py` require `ollama serve` + `nomic-embed-text` pulled.
+Run them with: `python -m pytest app/tests/test_embeddings.py -m integration -v`
 
 ---
 
@@ -153,58 +159,27 @@ Both `data/processed/` and `data/embeddings/` are in `.gitignore`.
 
 ---
 
-## Next Step: Step 4 — Embeddings and Vector Store
+## Next Step: Step 5 — Retrieval
 
-Implement two files. Follow `docs/IMPLEMENTATION_PLAN.md` Step 4 exactly.
-
-### `app/embeddings/store.py`
+Implement `app/retrieval/retriever.py`. Follow `docs/IMPLEMENTATION_PLAN.md` Step 5 exactly.
 
 ```python
-import chromadb
-from app.config import settings
-
-client = chromadb.PersistentClient(path=settings.embeddings_path)
-collection = client.get_or_create_collection(
-    name=settings.collection_name,
-    metadata={"hnsw:space": "cosine"},  # must be set at creation — cannot change later
-)
+def retrieve(
+    query: str,
+    top_k: int = settings.top_k,
+    product_family: str | None = None,
+) -> list[dict]:
 ```
 
-Three functions:
-- `upsert_chunks(chunks: list[dict], embeddings: list[list[float]])` — ids from `chunk["chunk_id"]`, documents from `chunk["text"]`, metadatas: `source_file`, `page_number`, `section_heading`, `document_type`, `product_family`
-- `query(embedding: list[float], top_k: int, filter: dict = None) -> list[dict]` — returns list of dicts with `text`, `score`, and all metadata; `filter` maps to ChromaDB `where` clause
-- Module-level `client` and `collection` instances (created once on import)
-
-### `app/embeddings/embedder.py`
-
-```python
-from langchain_ollama import OllamaEmbeddings
-from app.config import settings
-
-embeddings_model = OllamaEmbeddings(
-    model=settings.embedding_model,
-    base_url=settings.ollama_base_url,
-)
-```
-
-One function: `embed_texts(texts: list[str]) -> list[list[float]]`
-
-### Verification
-
-```bash
-# Embed 3 test strings, check vector length == 768, upsert, query
-python -c "
-from app.embeddings.embedder import embed_texts
-vecs = embed_texts(['hello world', 'motor calibration', 'safety warnings'])
-print('Vector length:', len(vecs[0]))  # should be 768
-"
-```
-
-Then upsert those vectors and query with one of the same strings — it must return as the top result.
+Steps inside:
+1. Embed `query` using `embedder.embed_texts([query])[0]`
+2. Build `filter = {"product_family": product_family}` if product_family is not None, else `None`
+3. Call `store.query(embedding, top_k, filter)`
+4. Return the list of dicts as-is (already has `text`, `score`, `source_file`, `page_number`, `section_heading`)
 
 ### Tests to write
 
-Add `app/tests/test_embeddings.py` with integration tests that **require Ollama to be running** — mark them with `pytest.mark.integration` or guard with a `skipif` on Ollama availability. Unit tests (mocking the embeddings model) are acceptable if integration tests are also included.
+Add `app/tests/test_retrieval.py`. Unit tests should mock both `embed_texts` and `store.query` to avoid Ollama/ChromaDB deps. Integration tests (marked `integration`) run the full path with real Ollama + a temp ChromaDB collection.
 
 ---
 
