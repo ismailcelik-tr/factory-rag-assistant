@@ -1,44 +1,53 @@
-"""Load PDF documents from disk using LangChain's PyPDFLoader.
+"""Load PDF documents from disk using PyMuPDF (fitz).
 
 Returns one LangChain Document per page. Each Document carries:
   - page_content: extracted plain text
-  - metadata["source"]: path to the source file as passed to PyPDFLoader
+  - metadata["source"]: path to the source file
   - metadata["page"]: 0-indexed page number (add 1 in the metadata step)
+
+PyMuPDF is used instead of PyPDFLoader because it produces clean, properly
+spaced text for PDFs that use character-spaced fonts — a common issue with
+documents exported from certain design tools.
 """
 
 import logging
 from pathlib import Path
 
-from langchain_community.document_loaders import PyPDFLoader
+import fitz  # pymupdf
 from langchain_core.documents import Document
 
 logger = logging.getLogger(__name__)
 
 
 def load_pdf(path: str) -> list[Document]:
-    """Load a single PDF file and return one Document per page.
+    """Load a single PDF file and return one Document per page."""
+    docs: list[Document] = []
+    pdf = fitz.open(path)
 
-    Returns an empty list if the file yields no text (e.g. scanned PDF).
-    """
-    docs: list[Document] = PyPDFLoader(path).load()
+    for page_num, page in enumerate(pdf):
+        text = page.get_text()
+        if text.strip():
+            docs.append(
+                Document(
+                    page_content=text,
+                    metadata={"source": path, "page": page_num},
+                )
+            )
 
-    if all(not doc.page_content.strip() for doc in docs):
+    pdf.close()
+
+    if not docs:
         logger.warning(
             "No text extracted from %s — file may be a scanned PDF (no text layer).",
             path,
         )
-        return []
 
     logger.debug("Loaded %d page(s) from %s", len(docs), path)
     return docs
 
 
 def load_directory(path: str) -> list[Document]:
-    """Load all PDF files found recursively under path.
-
-    Files that yield no text are skipped with a warning.
-    Returns all pages from all valid PDFs, in filesystem order.
-    """
+    """Load all PDF files found recursively under path."""
     pdf_paths = sorted(Path(path).rglob("*.pdf"))
 
     if not pdf_paths:

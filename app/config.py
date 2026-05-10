@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.1
     llm_max_tokens: int = 600
 
+    # Chunking
+    chunk_size: int = 1500
+    chunk_overlap: int = 200
+
     # Retrieval
     top_k: int = 5
     max_context_tokens: int = 3000

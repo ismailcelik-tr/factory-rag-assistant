@@ -13,6 +13,7 @@ dependencies = [
     "langchain-chroma>=0.1",
     "chromadb>=0.5",
     "pypdf>=5",
+    "pymupdf>=1.24",
     "httpx>=0.28",
 ]
 

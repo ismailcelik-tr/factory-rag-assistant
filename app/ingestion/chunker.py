@@ -10,17 +10,14 @@ RecursiveCharacterTextSplitter preserves source/page metadata on each chunk.
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=1500,
-    chunk_overlap=200,
-    separators=["\n\n", "\n", ". ", " "],
-)
+from app.config import settings
 
 
 def split_documents(documents: list[Document]) -> list[Document]:
-    """Split a list of Documents into ~1500-character chunks with 200-char overlap.
-
-    Source file path and page number from each Document's metadata are
-    preserved on every output chunk automatically.
-    """
-    return _splitter.split_documents(documents)
+    """Split Documents into overlapping chunks using chunk_size/chunk_overlap from settings."""
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=settings.chunk_size,
+        chunk_overlap=settings.chunk_overlap,
+        separators=["\n\n", "\n", ". ", " "],
+    )
+    return splitter.split_documents(documents)
